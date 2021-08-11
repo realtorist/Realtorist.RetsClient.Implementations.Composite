@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <PackageId>Realtorist.RetsClient.Implementations.Composite</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>Dmytro Bondarchuk</Authors>
+    <Title>Realtorist.RetsClient.Implementations.Composite</Title>
+    <Description>Composite implementation of the RetsClient for the Realtorist framework</Description>
+    <RepositoryUrl>https://github.com/realtorist/Realtorist.RetsClient.Implementations.Composite</RepositoryUrl>
+    <ReleaseNotes>Initial publish</ReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Realtorist.Models" Version="0.0.1" />
+    <PackageReference Include="Realtorist.DataAccess.Abstractions" Version="0.0.1" />
+    <PackageReference Include="Realtorist.RetsClient.Abstractions" Version="0.0.1" />
+    <PackageReference Include="Realtorist.Services.Abstractions" Version="0.0.1" />
+    <PackageReference Include="Realtorist.RetsClient.Implementations.Crea" Version="0.0.1" />
+  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Cronos" Version="0.7.1" />
+	</ItemGroup>
+
+</Project>
