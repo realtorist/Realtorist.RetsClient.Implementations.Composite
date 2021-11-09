@@ -10,6 +10,9 @@ using Realtorist.Models.Helpers;
 using Realtorist.Models.Settings;
 using Realtorist.RetsClient.Abstractions;
 using Realtorist.Services.Abstractions.Providers;
+using Realtorist.Extensions.Base.Manager;
+using Realtorist.Services.Abstractions.Events;
+using Realtorist.Models.Events;
 
 namespace Realtorist.RetsClient.Implementations.Composite
 {
@@ -17,27 +20,40 @@ namespace Realtorist.RetsClient.Implementations.Composite
     {
         private readonly ISettingsProvider _settingsProvider;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IUpdateFlowFactory _updateFlowFactory;
-        private ILogger _logger;
+        private readonly IExtensionManager _extensionManager;
+        private readonly IEventLogger _eventLogger;
+        private readonly ILogger _logger;
 
-        public CompositeUpdateFlow(ISettingsProvider settingsProvider, IServiceProvider serviceProvider, IUpdateFlowFactory updateFlowFactory, ILogger<CompositeUpdateFlow> logger)
+        public CompositeUpdateFlow(
+            ISettingsProvider settingsProvider, 
+            IServiceProvider serviceProvider, 
+            IExtensionManager extensionManager,
+            IEventLogger eventLogger,
+            ILogger<CompositeUpdateFlow> logger)
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _updateFlowFactory = updateFlowFactory ?? throw new ArgumentNullException(nameof(updateFlowFactory));
+            _extensionManager = extensionManager ?? throw new ArgumentNullException(nameof(extensionManager));
+            _eventLogger = eventLogger ?? throw new ArgumentNullException(nameof(eventLogger));
         }
 
         public async Task<int> LaunchAsync()
         {
-            var sources = await _settingsProvider.GetSettingAsync<RetsConfiguration[]>(SettingTypes.ListingSources);
+            var settings = await _settingsProvider.GetSettingAsync<ListingsSettings>(SettingTypes.Listings);
+            if (settings is null || settings.Feeds.IsNullOrEmpty())
+            {
+                _logger.LogWarning($"Skipping listings feeds update. No settings were found");
+                return 0;
+            }
+
             var websiteSettings = await _settingsProvider.GetSettingAsync<WebsiteSettings>(SettingTypes.Website);
 
             var utcNow = DateTime.UtcNow;
             var now = websiteSettings.GetDateTimeInTimeZoneFromUtc(utcNow);
 
             var tasks = new List<Task<int>>();
-            foreach(var source in sources)
+            foreach(var source in settings.Feeds)
             {
 
                 if (source.UpdateTime.IsNullOrEmpty()) continue;
@@ -48,10 +64,20 @@ namespace Realtorist.RetsClient.Implementations.Composite
                     continue;
                 }
 
-                _logger.LogInformation($"Time: {now}. Launching update flow for source '{source.ListingSource}'");
+                _logger.LogInformation($"Time: {now}. Launching update flow for source '{source.FeedType}'");
 
-                var type = _updateFlowFactory.GetUpdateFlowType(source.ListingSource);
-                var flow = (IUpdateFlow)ActivatorUtilities.CreateInstance(_serviceProvider, type, Options.Create(source));
+                var implementation = _extensionManager.GetInstances<IListingsFeedExtension>().FirstOrDefault(ext => ext.Name == source.FeedType);
+                if (implementation is null)
+                {
+                    var message = $"Can't find extension for listing feed of type '{source.FeedType}'. Skipping update";
+                    
+                    _logger.LogWarning(message);
+                    await _eventLogger.CreateEventAsync(EventLevel.Warning, EventTypes.ListingUpdate, "Unknown feed", message);
+                    
+                    continue;
+                }
+
+                var flow = (IUpdateFlow)ActivatorUtilities.CreateInstance(_serviceProvider, implementation.UpdateFlowType, Options.Create(source));
 
                 var task = flow.LaunchAsync();
                 tasks.Add(task);
